@@ -2,57 +2,96 @@ package test.user;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import test.user.dto.UserDto;
-import test.user.dto.UserMapper;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriBuilder;
+import reactor.core.publisher.Mono;
 
-import javax.validation.Valid;
-import java.util.List;
-import java.util.stream.Collectors;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
+import java.util.Map;
 
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping(path = "/users")
+@RequestMapping(path = "/users/**")
+/**
+ *
+ * на https://jsonplaceholder.typicode.com/ запросы к /api/*** всегда возвращают "{}"
+ * без /api/ запросы возвращают данные
+ */
 public class UserController {
-    private final UserService userService;
+    private final WebClient webClient;
 
     @GetMapping
-    public List<UserDto> getAllUsers() {
+    public ResponseEntity getAllUsers(HttpServletRequest request) {
         log.info("Получен запрос на получение списка всех пользователей");
-        return userService.getAllUsers().stream()
-                .map(UserMapper::toUserDto)
-                .collect(Collectors.toList());
+        String uri = request.getRequestURI();
+        Map<String, String[]> parameterMap = request.getParameterMap();
+
+        ClientResponse response = webClient
+                .get()
+                .uri(uriBuilder -> {
+                    UriBuilder path = uriBuilder.path(uri);
+                    for (Map.Entry<String, String[]> stringEntry : parameterMap.entrySet()) {
+                        path.queryParam(stringEntry.getKey(), Arrays.stream(stringEntry.getValue()).findFirst().get());
+                    }
+                    return uriBuilder.build();
+                }).accept(MediaType.APPLICATION_JSON).exchange().block();
+        String body = response.bodyToMono(String.class).block();
+        HttpStatus httpStatus = response.statusCode();
+        return new ResponseEntity(body, httpStatus);
     }
 
-    @PostMapping
-    public UserDto saveNewUser(@Valid @RequestBody UserDto dto) {
-        log.info("Получен запрос на добавление пользователя '{}'", dto);
-        return UserMapper.toUserDto(userService.saveUser(
-                dto.getId(),
-                dto.getEmail(),
-                dto.getName()
-        ));
+    /*@PostMapping
+    public UserDto saveNewUser(@Valid @RequestBody HttpServletRequest request) {
+        log.info("Получен запрос на добавление пользователя '{}'", request);
+        Mono<UserDto> userDtoMono = webClient.post()
+                .uri("/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(dto)
+                .retrieve()
+                .bodyToMono(UserDto.class);
+        return userDtoMono.block();
     }
 
     @PatchMapping("/{userId}")
-    public UserDto updateUser(@PathVariable("userId") Long userId, @RequestBody UserDto dto) {
+    public UserDto updateUser(@PathVariable("userId") Long userId, @RequestBody HttpServletRequest request) {
         log.info("Получен запрос на обновление данных пользователя '{}'", userId);
         if (dto.getId() == null) {
             dto.setId(userId);
         }
-        return UserMapper.toUserDto(userService.updateUser(userId, UserMapper.toUser(dto)));
+        Mono<UserDto> userDtoMono = webClient.patch()
+                .uri("/users/{userId}", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(dto)
+                .retrieve()
+                .bodyToMono(UserDto.class);
+        return userDtoMono.block();
     }
 
     @GetMapping("/{userId}")
     public UserDto getUser(@PathVariable("userId") Long userId) {
         log.info("Получен запрос - показать данные пользователя '{}'", userId);
-        return UserMapper.toUserDto(userService.getUserById(userId));
+        Mono<UserDto> userDtoMono = webClient.get()
+                .uri("/users/{userId}", userId)
+                .retrieve()
+                .bodyToMono(UserDto.class);
+        return userDtoMono.block();
     }
 
     @DeleteMapping("/{userId}")
     public void deleteUser(@PathVariable("userId") Long userId) {
         log.info("Получен запрос - удалить данные пользователя '{}'", userId);
-        userService.deleteUserById(userId);
-    }
+        webClient.delete()
+                .uri("/users/{userId}", userId)
+                .retrieve()
+                .toBodilessEntity();
+    }*/
 }
