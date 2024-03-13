@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriBuilder;
@@ -16,6 +18,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -49,19 +52,32 @@ public class UserController {
         return new ResponseEntity(body, httpStatus);
     }
 
-    /*@PostMapping
-    public UserDto saveNewUser(@Valid @RequestBody HttpServletRequest request) {
+    @PostMapping
+    public ResponseEntity saveNewUser(HttpServletRequest request) throws Exception {
         log.info("Получен запрос на добавление пользователя '{}'", request);
-        Mono<UserDto> userDtoMono = webClient.post()
-                .uri("/users")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(dto)
-                .retrieve()
-                .bodyToMono(UserDto.class);
-        return userDtoMono.block();
+        String uri = request.getRequestURI();
+        Map<String, String[]> parameterMap = request.getParameterMap();
+        String data = "";
+        data = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
+        Mono<String> mono = Mono.just(data);
+        ClientResponse response = webClient.post()
+                .uri(uriBuilder -> {
+                    UriBuilder path = uriBuilder.path(uri);
+                    for (Map.Entry<String, String[]> stringEntry : parameterMap.entrySet()) {
+                        path.queryParam(stringEntry.getKey(), Arrays.stream(stringEntry.getValue()).findFirst().get());
+                    }
+                    return uriBuilder.build();
+                })
+                .accept(MediaType.APPLICATION_JSON)
+                .body(mono, String.class)
+                .exchange()
+                .block();
+        String body = response.bodyToMono(String.class).block();
+        HttpStatus httpStatus = response.statusCode();
+        return new ResponseEntity(body, httpStatus);
     }
 
-    @PatchMapping("/{userId}")
+    /*@PatchMapping("/{userId}")
     public UserDto updateUser(@PathVariable("userId") Long userId, @RequestBody HttpServletRequest request) {
         log.info("Получен запрос на обновление данных пользователя '{}'", userId);
         if (dto.getId() == null) {
