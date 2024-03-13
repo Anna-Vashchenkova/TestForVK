@@ -77,37 +77,32 @@ public class UserController {
         return new ResponseEntity(body, httpStatus);
     }
 
-    /*@PatchMapping("/{userId}")
-    public UserDto updateUser(@PathVariable("userId") Long userId, @RequestBody HttpServletRequest request) {
-        log.info("Получен запрос на обновление данных пользователя '{}'", userId);
-        if (dto.getId() == null) {
-            dto.setId(userId);
-        }
-        Mono<UserDto> userDtoMono = webClient.patch()
-                .uri("/users/{userId}", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(dto)
-                .retrieve()
-                .bodyToMono(UserDto.class);
-        return userDtoMono.block();
+    @PutMapping()
+    public ResponseEntity updateUser(HttpServletRequest request) throws Exception {
+        log.info("Получен запрос на обновление данных пользователя '{}'", request);
+
+        String uri = request.getRequestURI();
+        Map<String, String[]> parameterMap = request.getParameterMap();
+        String data = "";
+        data = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
+        Mono<String> mono = Mono.just(data);
+        ClientResponse response = webClient.put()
+                .uri(uriBuilder -> {
+                    UriBuilder path = uriBuilder.path(uri);
+                    for (Map.Entry<String, String[]> stringEntry : parameterMap.entrySet()) {
+                        path.queryParam(stringEntry.getKey(), Arrays.stream(stringEntry.getValue()).findFirst().get());
+                    }
+                    return uriBuilder.build();
+                })
+                .accept(MediaType.APPLICATION_JSON)
+                .body(mono, String.class)
+                .exchange()
+                .block();
+        String body = response.bodyToMono(String.class).block();
+        HttpStatus httpStatus = response.statusCode();
+        return new ResponseEntity(body, httpStatus);
     }
 
-    @GetMapping("/{userId}")
-    public UserDto getUser(@PathVariable("userId") Long userId) {
-        log.info("Получен запрос - показать данные пользователя '{}'", userId);
-        Mono<UserDto> userDtoMono = webClient.get()
-                .uri("/users/{userId}", userId)
-                .retrieve()
-                .bodyToMono(UserDto.class);
-        return userDtoMono.block();
-    }
 
-    @DeleteMapping("/{userId}")
-    public void deleteUser(@PathVariable("userId") Long userId) {
-        log.info("Получен запрос - удалить данные пользователя '{}'", userId);
-        webClient.delete()
-                .uri("/users/{userId}", userId)
-                .retrieve()
-                .toBodilessEntity();
-    }*/
+
 }
