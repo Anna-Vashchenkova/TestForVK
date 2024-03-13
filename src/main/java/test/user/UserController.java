@@ -103,6 +103,21 @@ public class UserController {
         return new ResponseEntity(body, httpStatus);
     }
 
+    @DeleteMapping()
+    public void deleteUser(HttpServletRequest request) {
+        log.info("Получен запрос - удалить данные пользователя '{}'", request);
+        String uri = request.getRequestURI();
+        Map<String, String[]> parameterMap = request.getParameterMap();
 
-
+        ClientResponse response = webClient
+                .delete()
+                .uri(uriBuilder -> {
+                    UriBuilder path = uriBuilder.path(uri);
+                    for (Map.Entry<String, String[]> stringEntry : parameterMap.entrySet()) {
+                        path.queryParam(stringEntry.getKey(), Arrays.stream(stringEntry.getValue()).findFirst().get());
+                    }
+                    return uriBuilder.build();
+                }).accept(MediaType.APPLICATION_JSON).exchange().block();
+        response.bodyToMono(String.class).block();
+    }
 }
